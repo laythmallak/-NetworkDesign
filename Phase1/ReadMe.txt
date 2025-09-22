@@ -1,4 +1,4 @@
-# Phase 1B – UDP File Transfer (RDT 1.0)
+# Phase 1 – UDP Message/File Transfer
 
 ## Authors
 - [Layth Mallak]
