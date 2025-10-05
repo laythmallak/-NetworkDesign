@@ -1,5 +1,7 @@
 from socket import *
 import struct, random, time
+import threading
+from queue import Queue, Empty
 
 #   setup
 serverPort = 12007
@@ -9,6 +11,8 @@ serverSocket.bind(('', serverPort))  # listen for client
 
 # for option 1 no bit errors
 DATA_FLIP_PROB = 0.0 # use it for option 3, change it to .05
+
+DELAY_ACK_MAX_MS = 500
 
 # ---------- tiny RDT2.2 header + checksum ----------
 TYPE_DATA, TYPE_ACK, FLAG_FIN = 1, 2, 0x01
@@ -76,6 +80,25 @@ last_good_seq = 1    # used for re-ACK
 written = 0
 t0 = None
 
+_ack_q = Queue()
+_stop_ack = threading.Event()
+dup_acks = 0
+
+#ack sender thread
+def _ack_sender():
+    while not _stop_ack.is_set():
+        try:
+            seq = _ack_q.get(timeout=0.1)
+        except Empty:
+            continue
+        
+        if DELAY_ACK_MAX_MS > 0:
+            time.sleep(random.uniform(0, DELAY_ACK_MAX_MS) / 1000.0)
+        serverSocket.sendto(make_ack(seq), clientAddress)
+        _ack_q.task_done()
+
+threading.Thread(target=_ack_sender, daemon=True).start()
+
 #  receive reliably
 while remove > 0:
     raw, _ = serverSocket.recvfrom(HDR_LEN + buffer + 512)
@@ -86,7 +109,8 @@ while remove > 0:
 
     # bad/corrupt/not DATA
     if (not pkt.get("ok")) or pkt.get("type") != TYPE_DATA:
-        serverSocket.sendto(make_ack(last_good_seq), clientAddress)
+        _ack_q.put(last_good_seq) # re-ACK last good
+        dup_acks += 1
         continue
 
     seq = pkt["seq"]
@@ -95,16 +119,22 @@ while remove > 0:
             fout.write(pkt["payload"])
             written += pkt["length"]
             remove  -= pkt["length"]
-        serverSocket.sendto(make_ack(seq), clientAddress)
+        _ack_q.put(seq)  # ACK this one
         last_good_seq = seq
         expected_seq ^= 1
     else:
         # duplicate
-        serverSocket.sendto(make_ack(last_good_seq), clientAddress)
+        _ack_q.put(last_good_seq) # re-ACK last good
+        dup_acks += 1
 
 
 fout.close()
+
+#stop ACK thread
+_stop_ack.set()
+
 serverSocket.sendto(b"ok ", clientAddress)
 print(f"Wrote: {outfile} ({written} bytes)")
 print(f"TOTAL_TIME_SEC: {0.0 if t0 is None else time.perf_counter()-t0:.6f}")
+print(f"DUPLICATE_ACKS: {dup_acks}")
 serverSocket.close()

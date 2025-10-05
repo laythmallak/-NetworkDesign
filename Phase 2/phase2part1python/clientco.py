@@ -1,5 +1,6 @@
 from socket import *
 import os, struct, random, time
+import threading
 
 #  setup
 serverName = "127.0.0.1"       # the server ip address
@@ -12,6 +13,10 @@ file = "udpfile.jpg"           #  file to send
 
 # no bit errors
 ACK_FLIP_PROB = 0.00  # for option two,  it will be .05
+
+DELAY_DATA_MAX_MS = 500
+
+RTO = 0.5
 
 # tiny RDT2.2 header + checksum
 TYPE_DATA, TYPE_ACK, FLAG_FIN = 1, 2, 0x01
@@ -72,11 +77,34 @@ def maybe_corrupt(b: bytes, p: float) -> bytes:
 filesize = os.path.getsize(file)
 clientSocket.sendto(str(filesize).encode("utf-8"), (serverName, serverPort))
 
+_ack_for_seq = -1
+_ack_event = threading.Event()
+_stop_event = threading.Event()
+
+def _ack_listener(): 
+    #reads socket, calidates ACK, signals sender loop
+    global _ack_for_seq
+    while not _stop_event.is_set():
+        try:
+            raw, _ = clientSocket.recvfrom(2048)
+        except timeout:
+            continue
+        raw = maybe_corrupt(raw, ACK_FLIP_PROB)
+        ack = parse_pkt(raw)
+        if ack.get("ok") and ack.get("type") == TYPE_ACK:
+            global _ack_for_seq
+            _ack_for_seq = ack.get("seq", -1)
+            _ack_event.set()
+
+_listener_thread = threading.Thread(target=_ack_listener, daemon=True)
+_listener_thread.start()
+
 #  send file reliably
 with open(file, "rb") as f:
     storing = 0           # bytes successfully ACKed
     seq = 0               # alternating bit
     t0 = time.perf_counter()
+    retransmissions = 0
 
     while storing < filesize:
         chunk = f.read(buffer)
@@ -86,26 +114,30 @@ with open(file, "rb") as f:
         pkt = make_data(seq, chunk, fin)
 
         # send this DATA until we get the correct ACK
+        first_try = True
         while True:
+            if DELAY_DATA_MAX_MS > 0:
+                time.sleep(random.uniform(0, DELAY_DATA_MAX_MS) / 1000.0)
+            _ack_event.clear()
             clientSocket.sendto(pkt, (serverName, serverPort))
-            try:
-                raw, _ = clientSocket.recvfrom(2048)
-            except timeout:
-                continue
-            raw = maybe_corrupt(raw, ACK_FLIP_PROB)  # (Option 2) test knob
-            ack = parse_pkt(raw)
-            if ack.get("ok") and ack.get("type") == TYPE_ACK and ack.get("seq") == seq:
+            got = _ack_event.wait(timeout=RTO)
+            
+            if got and _ack_for_seq == seq:
                 storing += len(chunk)
                 seq ^= 1
                 break
+            else:
+                if not first_try:
+                    retransmissions += 1
+                first_try = False
 
-
-#  confirmation from server
+_stop_event.set()
 try:
     msg, _ = clientSocket.recvfrom(2048)
     print(msg.decode())
 except timeout:
     print("done")
 
-print(f"TOTAL_TIME_SEC: {time.perf_counter() - t0:.6f}")
+print(f"TOTAL TIME: {time.perf_counter() - t0:.6f}")
+print(f"RETRANSMISSIONS: {retransmissions}")
 clientSocket.close()
