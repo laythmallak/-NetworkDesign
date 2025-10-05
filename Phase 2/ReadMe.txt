@@ -2,7 +2,7 @@
 
 ## Authors
 - []
-- [Group Members: ]
+- [Group Members: Binyam Mahari, Layth Mallak, Katrina Wong ]
 
 ### Project Phase 2: Sections 1 and 2
 
@@ -29,10 +29,10 @@ This code implements sections 1 and 2 of the project:
 ####
 
 ### Environment
-# **Operating System: Windows 11  
+# **Operating System: Windows 11, MacOS  
 # **Programming Language**: Python  
 # **Version**: Python 3.13 
-# **IDE/Editor Used**: Visual Studio Code
+# **IDE/Editor Used**: Visual Studio Code, PyCharm
 ---
 
 ####
