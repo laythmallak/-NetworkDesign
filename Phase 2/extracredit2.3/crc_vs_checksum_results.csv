@@ -1,0 +1,13 @@
+Method,LossRate(%),CompletionTime(s),Retransmissions,UndetectedErrors
+Checksum,0,0.076,0,0
+Checksum,5,0.076,0,0
+Checksum,10,0.074,0,0
+Checksum,20,0.074,0,0
+Checksum,40,0.075,0,0
+Checksum,60,0.075,0,0
+CRC16,0,0.078,0,0
+CRC16,5,0.081,0,0
+CRC16,10,0.075,0,0
+CRC16,20,0.090,0,0
+CRC16,40,0.081,0,0
+CRC16,60,0.078,0,0
