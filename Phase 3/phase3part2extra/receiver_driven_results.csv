@@ -1,0 +1,4 @@
+mode,rate,rto,payload_size,bytes_ok,total_time_s,kbps,retransmissions,timeouts,acks_total,acks_useful,ack_efficiency
+6,0.0,0.04,1024,1329152,0.0197,539412.15,0,0,0,0,0.0
+6,0.1,0.04,1024,1082368,0.015,576014.9,0,0,0,0,0.0
+6,0.2,0.04,1024,1167873,0.016,584480.8,0,0,0,0,0.0
